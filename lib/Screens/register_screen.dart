@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
+import '../Service/db_helper.dart';
 
 class RegisterScreen extends StatefulWidget {
   @override
@@ -9,6 +10,13 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  // Controladores para cada campo
+  TextEditingController nameController = TextEditingController();
+  TextEditingController apellidoPaterno = TextEditingController();
+  TextEditingController apellidoMaterno = TextEditingController();
+  TextEditingController emailController = TextEditingController();
+  TextEditingController passwordController = TextEditingController();
+  TextEditingController confirmPasswordController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -68,21 +76,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       style: TextStyle(fontSize: 14.0, color: Colors.black),
                     ),
                     SizedBox(height: 20.0),
-                    _buildTextField(Icons.person, 'Ingresa tu nombre(s)'),
+                    _buildTextField(
+                      Icons.person,
+                      'Ingresa tu nombre(s)',
+                      controller: nameController,
+                    ),
                     SizedBox(height: 10.0),
                     _buildTextField(
                       Icons.person,
                       'Ingresa tu apellido paterno',
+                      controller: apellidoPaterno,
                     ),
                     SizedBox(height: 10.0),
                     _buildTextField(
                       Icons.person,
                       'Ingresa tu apellido materno',
+                      controller: apellidoMaterno,
                     ),
                     SizedBox(height: 10.0),
                     _buildTextField(
                       Icons.email,
                       'Ingresa tu correo electrónico',
+                      controller: emailController,
                     ),
                     SizedBox(height: 10.0),
                     _buildPasswordField(
@@ -94,6 +109,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           _obscurePassword = !_obscurePassword;
                         });
                       },
+                      controller: passwordController,
                     ),
                     SizedBox(height: 10.0),
                     _buildPasswordField(
@@ -105,10 +121,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           _obscureConfirmPassword = !_obscureConfirmPassword;
                         });
                       },
+                      controller: confirmPasswordController,
                     ),
                     SizedBox(height: 20.0),
                     ElevatedButton(
-                      onPressed: () {},
+                      onPressed: _registerUser,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Color(0xFFE510B3),
                         shape: RoundedRectangleBorder(
@@ -151,12 +168,67 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  // Función para registrar el usuario en la base de datos
+  Future<void> _registerUser() async {
+    final name = nameController.text.trim();
+    final apellidoPterno = apellidoPaterno.text.trim();
+    final apellidoMterno = apellidoMaterno.text.trim();
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+    final confirmPassword = confirmPasswordController.text.trim();
+
+    if (name.isEmpty ||
+        apellidoPterno.isEmpty ||
+        apellidoMterno.isEmpty ||
+        email.isEmpty ||
+        password.isEmpty ||
+        confirmPassword.isEmpty) {
+      _showMessage('Por favor, completa todos los campos');
+      return;
+    }
+
+    if (password != confirmPassword) {
+      _showMessage('Las contraseñas no coinciden');
+      return;
+    }
+
+    // Inserta el usuario en la base de datos
+    Map<String, dynamic> newUser = {
+      'name': name,
+      'apellido_paterno': apellidoMterno,
+      'apellido_materno': apellidoMterno,
+      'email': email,
+      'password': password, // Nota: en producción, encripta la contraseña
+    };
+
+    try {
+      await DBHelper().insertUser(newUser);
+      _showMessage('Usuario registrado correctamente');
+      //navegar a la pantalla de login
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => LoginScreen()),
+      );
+    } catch (e) {
+      _showMessage('Error al registrar el usuario: $e');
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  //modifocada para aceptar el controlador
   Widget _buildTextField(
     IconData icon,
     String hintText, {
     bool obscureText = false,
+    TextEditingController? controller,
   }) {
     return TextField(
+      controller: controller,
       obscureText: obscureText,
       decoration: InputDecoration(
         filled: true,
@@ -175,9 +247,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     IconData icon,
     String hintText,
     bool obscureText,
-    VoidCallback toggleVisibility,
-  ) {
+    VoidCallback toggleVisibility, {
+    TextEditingController? controller,
+  }) {
     return TextField(
+      controller: controller,
       obscureText: obscureText,
       decoration: InputDecoration(
         filled: true,
