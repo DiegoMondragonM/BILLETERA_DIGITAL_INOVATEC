@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'register_screen.dart';
+import '../Service/db_helper.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -8,7 +9,9 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _obscureText = true;
-
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final DBHelper _dbHelper = DBHelper();
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -56,6 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Icon(Icons.account_circle, color: Colors.black, size: 100.0),
                   SizedBox(height: 20.0),
                   TextField(
+                    controller: _emailController, //agergacion del controlador
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: Colors.grey[200],
@@ -70,6 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   SizedBox(height: 20.0),
                   // Campo de contraseña con botón para mostrar u ocultar
                   TextField(
+                    controller: _passwordController,
                     obscureText: _obscureText,
                     decoration: InputDecoration(
                       filled: true,
@@ -96,7 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   SizedBox(height: 30.0),
                   ElevatedButton(
-                    onPressed: () {},
+                    onPressed: _loginUser,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Color(0xFFE510B3),
                       shape: RoundedRectangleBorder(
@@ -144,5 +149,30 @@ class _LoginScreenState extends State<LoginScreen> {
         ],
       ),
     );
+  }
+
+  void _loginUser() async {
+    String email = _emailController.text.trim();
+    String password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showMessage("Por favor, llena todos los campos");
+      return;
+    }
+
+    var user = await _dbHelper.getUser(email, password);
+    if (user != null) {
+      _showMessage("Inicio de sesión exitoso");
+      // Aquí puedes navegar a la pantalla de inicio
+      Navigator.pushReplacementNamed(context, '/home'); // Ajusta la ruta
+    } else {
+      _showMessage("Correo o contraseña incorrectos");
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
