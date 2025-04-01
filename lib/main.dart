@@ -1,15 +1,18 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:namer_app/providers/presupuesto_provider.dart';
 import 'package:namer_app/screens/menu_screen.dart';
 
 import 'package:provider/provider.dart';
 
 void main() {
+  // Forzar el modo de renderizado Canvas (desactiva Impeller/OpenGL)
+  debugDefaultTargetPlatformOverride =
+      TargetPlatform.fuchsia; // Truco temporal para software rendering
   runApp(
     ChangeNotifierProvider(
-      create:
-          (context) =>
-              PresupuestoProvider(), // Crea una instancia de PresupuestoProvider
+      create: (context) => PresupuestoProvider(),
       child: MyApp(),
     ),
   );
@@ -579,7 +582,470 @@ class AnimatedCard extends StatelessWidget {
   }
 }
 
+
+
+
 class AddCardScreen extends StatefulWidget {
+  const AddCardScreen({super.key});
+
+  @override
+  State<AddCardScreen> createState() => _AddCardScreenState();
+}
+
+class _AddCardScreenState extends State<AddCardScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _numberController = TextEditingController();
+  final _amountController = TextEditingController();
+  final _expiryDateController = TextEditingController();
+
+  String _cardType = 'Visa';
+  Color _cardColor = Colors.purple[300]!;
+  bool _isSaving = false;
+
+  final List<Color> _availableColors = [
+    Colors.purple[300]!,
+    Colors.blue[300]!,
+    Colors.green[300]!,
+    Colors.orange[300]!,
+    Colors.red[300]!,
+    Colors.teal[300]!,
+  ];
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _numberController.dispose();
+    _amountController.dispose();
+    _expiryDateController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveCard() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      final cardData = {
+        'name': _nameController.text.trim(),
+        'number': _numberController.text.trim(),
+        'type': _cardType,
+        'amount': _amountController.text.isNotEmpty
+            ? double.parse(_amountController.text).toStringAsFixed(2)
+            : '0.00',
+        'expiryDate': _expiryDateController.text.trim(),
+        'color': _cardColor.value,
+      };
+
+      await Provider.of<PresupuestoProvider>(context, listen: false)
+          .agregarTarjeta(cardData);
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const MenuScreen()),
+      );
+    } catch (e) {
+      setState(() => _isSaving = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Registrar Tarjeta'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.save),
+            onPressed: _isSaving ? null : _saveCard,
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              // Vista previa de la tarjeta
+              _buildCardPreview(),
+              const SizedBox(height: 30),
+
+              // Nombre de la tarjeta
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre de la tarjeta',
+                  prefixIcon: Icon(Icons.credit_card),
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) => value?.isEmpty ?? true
+                    ? 'Ingresa un nombre para la tarjeta'
+                    : null,
+                onChanged: (_) => setState(() {}),
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 20),
+
+              // Número de tarjeta con formato
+              TextFormField(
+                controller: _numberController,
+                decoration: const InputDecoration(
+                  labelText: 'Número de tarjeta',
+                  prefixIcon: Icon(Icons.numbers),
+                  border: OutlineInputBorder(),
+                  hintText: '1234 5678 9012 3456',
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(16),
+                  CardNumberFormatter(),
+                ],
+                validator: (value) {
+                  if (value?.isEmpty ?? true) return 'Ingresa el número';
+                  if (value!.replaceAll(' ', '').length != 16) {
+                    return 'Debe tener 16 dígitos';
+                  }
+                  return null;
+                },
+                onChanged: (_) => setState(() {}),
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 20),
+
+              // Tipo de tarjeta
+              _buildCardTypeSelector(),
+              const SizedBox(height: 20),
+
+              // Monto inicial
+              TextFormField(
+                controller: _amountController,
+                decoration: const InputDecoration(
+                  labelText: 'Monto inicial',
+                  prefixIcon: Icon(Icons.attach_money),
+                  border: OutlineInputBorder(),
+                  hintText: '1000.00',
+                ),
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
+                validator: (value) {
+                  if (value?.isEmpty ?? true) return 'Ingresa un monto';
+                  final amount = double.tryParse(value!);
+                  if (amount == null) return 'Monto inválido';
+                  if (amount < 0) return 'Debe ser positivo';
+                  return null;
+                },
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 20),
+
+              // Fecha de vencimiento
+              TextFormField(
+                controller: _expiryDateController,
+                decoration: const InputDecoration(
+                  labelText: 'Vencimiento (MM/AA)',
+                  prefixIcon: Icon(Icons.calendar_today),
+                  border: OutlineInputBorder(),
+                  hintText: 'MM/AA',
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(4),
+                  CardExpiryFormatter(),
+                ],
+                validator: (value) {
+                  if (value?.isEmpty ?? true) return 'Ingresa la fecha';
+                  if (!RegExp(r'^\d{2}/\d{2}$').hasMatch(value!)) {
+                    return 'Formato MM/AA';
+                  }
+                  return null;
+                },
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 25),
+
+              // Selector de color
+              _buildColorSelector(),
+              const SizedBox(height: 30),
+
+              // Botón de guardar
+              ElevatedButton(
+                onPressed: _isSaving ? null : _saveCard,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurpleAccent,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: _isSaving
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('GUARDAR TARJETA'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardPreview() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _cardColor,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text(
+                _cardType.toUpperCase(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            _numberController.text.isEmpty
+                ? '•••• •••• •••• ••••'
+                : _formatCardNumber(_numberController.text),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 30),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'TITULAR',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 10,
+                    ),
+                  ),
+                  Text(
+                    _nameController.text.isEmpty
+                        ? 'NOMBRE DEL TITULAR'
+                        : _nameController.text.toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'VENCIMIENTO',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 10,
+                    ),
+                  ),
+                  Text(
+                    _expiryDateController.text.isEmpty
+                        ? '••/••'
+                        : _expiryDateController.text,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardTypeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Tipo de tarjeta',
+          style: TextStyle(fontSize: 16),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: ChoiceChip(
+                label: const Text('Visa'),
+                selected: _cardType == 'Visa',
+                onSelected: (_) => setState(() => _cardType = 'Visa'),
+                selectedColor: Colors.deepPurpleAccent,
+                labelStyle: TextStyle(
+                  color: _cardType == 'Visa' ? Colors.white : Colors.black,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ChoiceChip(
+                label: const Text('Mastercard'),
+                selected: _cardType == 'Mastercard',
+                onSelected: (_) => setState(() => _cardType = 'Mastercard'),
+                selectedColor: Colors.deepPurpleAccent,
+                labelStyle: TextStyle(
+                  color: _cardType == 'Mastercard' ? Colors.white : Colors.black,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ChoiceChip(
+                label: const Text('Amex'),
+                selected: _cardType == 'Amex',
+                onSelected: (_) => setState(() => _cardType = 'Amex'),
+                selectedColor: Colors.deepPurpleAccent,
+                labelStyle: TextStyle(
+                  color: _cardType == 'Amex' ? Colors.white : Colors.black,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildColorSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Color de la tarjeta',
+          style: TextStyle(fontSize: 16),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 50,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _availableColors.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final color = _availableColors[index];
+              return GestureDetector(
+                onTap: () => setState(() => _cardColor = color),
+                child: Container(
+                  width: 50,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _cardColor == color
+                          ? Colors.black
+                          : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                  child: _cardColor == color
+                      ? const Icon(Icons.check, color: Colors.white)
+                      : null,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatCardNumber(String input) {
+    final cleaned = input.replaceAll(' ', '');
+    final buffer = StringBuffer();
+    for (int i = 0; i < cleaned.length; i++) {
+      if (i > 0 && i % 4 == 0) buffer.write(' ');
+      buffer.write(cleaned[i]);
+    }
+    return buffer.toString();
+  }
+}
+
+// Formateador para número de tarjeta (agrega espacios cada 4 dígitos)
+class CardNumberFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue,
+      TextEditingValue newValue,
+      ) {
+    final text = newValue.text.replaceAll(' ', '');
+    if (text.length > 16) return oldValue;
+
+    var buffer = StringBuffer();
+    for (int i = 0; i < text.length; i++) {
+      if (i > 0 && i % 4 == 0) buffer.write(' ');
+      buffer.write(text[i]);
+    }
+
+    return TextEditingValue(
+      text: buffer.toString(),
+      selection: TextSelection.collapsed(offset: buffer.length),
+    );
+  }
+}
+
+// Formateador para fecha de vencimiento (MM/AA)
+class CardExpiryFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue,
+      TextEditingValue newValue,
+      ) {
+    final text = newValue.text.replaceAll('/', '');
+    if (text.length > 4) return oldValue;
+
+    var buffer = StringBuffer();
+    for (int i = 0; i < text.length; i++) {
+      if (i == 2) buffer.write('/');
+      buffer.write(text[i]);
+    }
+
+    return TextEditingValue(
+      text: buffer.toString(),
+      selection: TextSelection.collapsed(offset: buffer.length),
+    );
+  }
+}
+
+
+/*class AddCardScreen extends StatefulWidget {
   @override
   _AddCardScreenState createState() => _AddCardScreenState();
 }
@@ -907,4 +1373,4 @@ class _AddCardScreenState extends State<AddCardScreen> {
       child: Text('Guardar Tarjeta', style: TextStyle(fontSize: 18.0)),
     );
   }
-}
+}*/
