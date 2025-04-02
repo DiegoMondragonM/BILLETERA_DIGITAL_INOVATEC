@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../Service/db_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AddCardScreen extends StatefulWidget {
   @override
@@ -247,17 +249,52 @@ class _AddCardScreenState extends State<AddCardScreen> {
   // Botón para guardar la tarjeta
   Widget _buildSaveButton() {
     return ElevatedButton(
-      onPressed: () {
+      onPressed: () async {
         if (_formKey.currentState!.validate()) {
-          // Guardar la tarjeta y regresar a la pantalla anterior
-          Navigator.pop(context, {
-            'name': nameController.text,
-            'number': numberController.text,
-            'type': cardType,
-            'amount': amountController.text,
-            'expiryDate': expiryDateController.text,
-            'color': cardColor.value, // Guardar el valor del color
-          });
+          try {
+            final dbHelper = DBHelper();
+            final prefs = await SharedPreferences.getInstance();
+            final userId = prefs.getInt('userId') ?? 0; // Obtiene el ID real
+
+            if (userId <= 0) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error: Usuario no identificado')),
+              );
+              return;
+            }
+
+            // Validación adicional del número de tarjeta
+            if (numberController.text.length < 16) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Número de tarjeta inválido')),
+              );
+              return;
+            }
+
+            final result = await dbHelper.insertCard({
+              'name': nameController.text,
+              'number': numberController.text,
+              'type': cardType,
+              'amount': amountController.text,
+              'expiryDate': expiryDateController.text,
+              'color': cardColor.value,
+              'userId': userId,
+            });
+
+            if (result > 0) {
+              // Si la inserción fue exitosa
+              Navigator.pop(context, true);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error al guardar la tarjeta')),
+              );
+            }
+          } catch (e) {
+            print('Error al insertar tarjeta: $e');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error crítico: ${e.toString()}')),
+            );
+          }
         }
       },
       style: ElevatedButton.styleFrom(

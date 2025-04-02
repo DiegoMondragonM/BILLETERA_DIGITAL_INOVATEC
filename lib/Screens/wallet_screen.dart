@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:namer_app/Screens/add_card_screen.dart';
+import 'package:namer_app/Screens/login_screen.dart';
 import '../Widgets/animated_card.dart';
+import '../Service/db_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WalletScreen extends StatefulWidget {
   @override
@@ -7,9 +11,63 @@ class WalletScreen extends StatefulWidget {
 }
 
 class _WalletScreenState extends State<WalletScreen> {
-  List<String> userCards = []; // Lista de tarjetas registradas
-  bool hasProfilePicture = false; // True si el usuario tiene foto de perfil
-  String userProfilePicUrl = ''; // URL de la foto del usuario (si la tiene)
+  // Variables de estado
+  List<Map<String, dynamic>> userCards = [];
+  bool isLoading = true;
+  int _userId = 0;
+  String _userEmail = 'Usuario';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData(); // Paso 1: Cargar ID de usuario primero
+  }
+
+  // Carga el ID y email del usuario desde SharedPreferences
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    setState(() {
+      _userId = prefs.getInt('userId') ?? 0;
+      _userEmail = prefs.getString('userEmail') ?? 'Usuario';
+    });
+
+    if (_userId > 0) {
+      await _loadCards(); // Paso 2: Cargar tarjetas si hay usuario
+    } else {
+      setState(() => isLoading = false); // Mostrar UI si no hay usuario
+    }
+  }
+
+  // Carga las tarjetas del usuario actual
+  Future<void> _loadCards() async {
+    try {
+      setState(() => isLoading = true);
+
+      final dbHelper = DBHelper();
+      final cards = await dbHelper.getCards(_userId);
+
+      setState(() {
+        userCards = cards;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error cargando tarjetas: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  // Cierra la sesión y redirige al login
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => LoginScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,6 +75,10 @@ class _WalletScreenState extends State<WalletScreen> {
       appBar: AppBar(
         title: Text('Billetera'),
         backgroundColor: Colors.deepPurpleAccent,
+        actions: [
+          IconButton(icon: Icon(Icons.refresh), onPressed: _loadCards),
+          IconButton(icon: Icon(Icons.logout), onPressed: _logout),
+        ],
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -29,13 +91,14 @@ class _WalletScreenState extends State<WalletScreen> {
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildUserProfile(),
-              SizedBox(height: 20.0),
+              SizedBox(height: 20),
               Expanded(
                 child:
-                    userCards.isEmpty
+                    isLoading
+                        ? _buildLoadingIndicator()
+                        : userCards.isEmpty
                         ? _buildNoCardsSection()
                         : _buildCardStack(),
               ),
@@ -46,31 +109,25 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  Widget _buildUserProfile() {
+  // -------------------------
+  // Widgets de la interfaz
+  // -------------------------
+
+  Widget _buildLoadingIndicator() {
     return Center(
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 50.0,
-            backgroundImage:
-                hasProfilePicture ? NetworkImage(userProfilePicUrl) : null,
-            backgroundColor: Colors.grey[200],
-            child:
-                hasProfilePicture
-                    ? null
-                    : Icon(
-                      Icons.account_circle,
-                      size: 100,
-                      color: Colors.white,
-                    ),
-          ),
-          SizedBox(height: 10.0),
-          Text(
-            'Usuario',
-            style: TextStyle(fontSize: 18.0, color: Colors.white),
-          ),
-        ],
+      child: CircularProgressIndicator(
+        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
       ),
+    );
+  }
+
+  Widget _buildUserProfile() {
+    return Column(
+      children: [
+        CircleAvatar(radius: 50, child: Icon(Icons.person, size: 50)),
+        SizedBox(height: 10),
+        Text(_userEmail, style: TextStyle(color: Colors.white, fontSize: 18)),
+      ],
     );
   }
 
@@ -106,18 +163,24 @@ class _WalletScreenState extends State<WalletScreen> {
     return Stack(
       alignment: Alignment.center,
       children: [
+        // Tarjetas
         for (int i = 0; i < userCards.length; i++)
           Positioned(
-            top: i * 10.0,
+            top: i * 10,
             child: GestureDetector(
-              onTap: () {
-                // Lógica para seleccionar la tarjeta o ver detalles
-              },
-              child: AnimatedCard(index: i, cardInfo: userCards[i]),
+              onTap: () => _showCardDetails(userCards[i]),
+              child: AnimatedCard(
+                index: i,
+                cardInfo: userCards[i]['name'],
+                cardColor: Color(userCards[i]['color']),
+                cardType: userCards[i]['type'],
+              ),
             ),
           ),
+
+        // Botón flotante
         Positioned(
-          bottom: 20.0,
+          bottom: 20,
           child: ElevatedButton(
             onPressed: _addNewCard,
             style: ElevatedButton.styleFrom(
@@ -127,16 +190,50 @@ class _WalletScreenState extends State<WalletScreen> {
               ),
               padding: EdgeInsets.symmetric(horizontal: 50, vertical: 15),
             ),
-            child: Text('Agregar Tarjeta', style: TextStyle(fontSize: 16.0)),
+            child: Text('Agregar Tarjeta'),
           ),
         ),
       ],
     );
   }
 
-  void _addNewCard() {
-    setState(() {
-      userCards.add('Tarjeta ${userCards.length + 1}');
-    });
+  // -------------------------
+  // Lógica adicional
+  // -------------------------
+
+  Future<void> _addNewCard() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => AddCardScreen()),
+    );
+
+    if (result == true) {
+      await _loadCards();
+    }
+  }
+
+  void _showCardDetails(Map<String, dynamic> card) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(card['name']),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Número: ${card['number']}'),
+                Text('Tipo: ${card['type']}'),
+                Text('Saldo: ${card['amount']}'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Cerrar'),
+              ),
+            ],
+          ),
+    );
   }
 }

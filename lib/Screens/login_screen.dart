@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:namer_app/Screens/wallet_screen.dart';
 import 'register_screen.dart';
 import '../Service/db_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -12,6 +14,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final DBHelper _dbHelper = DBHelper();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -163,8 +166,14 @@ class _LoginScreenState extends State<LoginScreen> {
     var user = await _dbHelper.getUser(email, password);
     if (user != null) {
       _showMessage("Inicio de sesión exitoso");
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('userId', user['id']); // Guarda ID
+      await prefs.setString('userEmail', email);
       // Aquí puedes navegar a la pantalla de inicio
-      Navigator.pushReplacementNamed(context, '/home'); // Ajusta la ruta
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => WalletScreen()),
+      ); // Ajusta la ruta
     } else {
       _showMessage("Correo o contraseña incorrectos");
     }

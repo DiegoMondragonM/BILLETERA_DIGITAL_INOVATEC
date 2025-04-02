@@ -37,6 +37,19 @@ class DBHelper {
         password TEXT
       )
     ''');
+    await db.execute('''
+    CREATE TABLE cards(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      number TEXT,
+      type TEXT,
+      amount TEXT,
+      expiryDate TEXT,
+      color INTEGER, 
+      userId INTEGER, 
+      FOREIGN KEY (userId) REFERENCES users(id)
+    )
+  ''');
   }
 
   // Método para insertar un usuario
@@ -57,5 +70,22 @@ class DBHelper {
       return results.first;
     }
     return null;
+  }
+
+  // Insertar tarjeta
+  Future<int> insertCard(Map<String, dynamic> card) async {
+    try {
+      final db = await database;
+      return await db.insert('cards', card);
+    } catch (e) {
+      //print('Error en insertCard: $e');
+      return 0; // Retorna 0 si hay error
+    }
+  }
+
+  // Obtener todas las tarjetas de un usuario
+  Future<List<Map<String, dynamic>>> getCards(int userId) async {
+    final db = await database;
+    return await db.query('cards', where: 'userId = ?', whereArgs: [userId]);
   }
 }
