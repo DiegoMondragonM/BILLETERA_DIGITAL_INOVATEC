@@ -4,7 +4,12 @@ import 'package:namer_app/providers/presupuesto_provider.dart';
 import 'package:namer_app/models/presupuesto.dart';
 
 class AgregarPresupuestoScreen extends StatefulWidget {
-  const AgregarPresupuestoScreen({super.key});
+  final String? tarjetaPreseleccionada;
+
+  const AgregarPresupuestoScreen({
+    super.key,
+    this.tarjetaPreseleccionada,
+  });
 
   @override
   State<AgregarPresupuestoScreen> createState() => _AgregarPresupuestoScreenState();
@@ -16,6 +21,17 @@ class _AgregarPresupuestoScreenState extends State<AgregarPresupuestoScreen> {
   final _cantidadController = TextEditingController();
   DateTime _fechaPago = DateTime.now();
   String? _tarjetaSeleccionada;
+
+  @override
+  void initState() {
+    super.initState();
+    final provider = Provider.of<PresupuestoProvider>(context, listen: false);
+    if (provider.selectedCardNumber != null) {
+      _tarjetaSeleccionada = provider.selectedCardNumber;
+    } else if (widget.tarjetaPreseleccionada != null) {
+      _tarjetaSeleccionada = widget.tarjetaPreseleccionada;
+    }
+  }
 
   Future<void> _seleccionarFecha(BuildContext context) async {
     final DateTime? fechaSeleccionada = await showDatePicker(
@@ -62,6 +78,79 @@ class _AgregarPresupuestoScreenState extends State<AgregarPresupuestoScreen> {
         );
       }
     }
+  }
+
+  Widget _buildTarjetaInfo(PresupuestoProvider provider) {
+    final card = provider.cards.firstWhere(
+          (c) => c['number'] == _tarjetaSeleccionada,
+      orElse: () => {'name': 'Tarjeta no encontrada', 'amount': '0.00', 'color': 0xFF6200EE},
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Color(card['color']),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.credit_card, color: Colors.white),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  card['name'] ?? 'Sin nombre',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Saldo: \$${(double.tryParse(card['amount'] ?? '0')?.toStringAsFixed(2))}',
+                  style: const TextStyle(
+                  color: Colors.white70,
+                      fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTarjetaDropdown(List<Map<String, dynamic>> cards) {
+    return DropdownButtonFormField<String>(
+      value: _tarjetaSeleccionada,
+      decoration: const InputDecoration(
+        labelText: 'Seleccionar tarjeta',
+        prefixIcon: Icon(Icons.credit_card),
+        border: OutlineInputBorder(),
+      ),
+      items: cards.map((card) => DropdownMenuItem<String>(
+        value: card['number'] as String,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(card['name'] as String? ?? 'Sin nombre'),
+            Text(
+              'Saldo: \$${(card['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
+              style: TextStyle(
+                color: (card['amount'] as num? ?? 0) >= 0 ? Colors.green : Colors.red,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      )).toList(),
+      onChanged: (value) => setState(() => _tarjetaSeleccionada = value),
+      validator: (value) => value == null ? 'Selecciona una tarjeta' : null,
+    );
   }
 
   @override
@@ -129,35 +218,11 @@ class _AgregarPresupuestoScreenState extends State<AgregarPresupuestoScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                DropdownButtonFormField<String>(
-                  value: _tarjetaSeleccionada,
-                  decoration: const InputDecoration(
-                    labelText: 'Seleccionar tarjeta',
-                    prefixIcon: Icon(Icons.credit_card),
-                    border: OutlineInputBorder(),
-                  ),
-                  items: cards.map((card) {
-                    final saldo = double.parse(card['amount'] ?? '0');
-                    return DropdownMenuItem<String>(
-                      value: card['number'],
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(card['name'] ?? 'Sin nombre'),
-                          Text(
-                            'Saldo: \$${saldo.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              color: saldo >= 0 ? Colors.green : Colors.red,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) => setState(() => _tarjetaSeleccionada = value),
-                  validator: (value) => value == null ? 'Selecciona una tarjeta' : null,
-                ),
+                // Mostramos la info de la tarjeta o el selector según corresponda
+                if (_tarjetaSeleccionada != null)
+                  _buildTarjetaInfo(provider),
+                if (_tarjetaSeleccionada == null)
+                  _buildTarjetaDropdown(cards),
                 const SizedBox(height: 30),
                 ElevatedButton(
                   onPressed: _submit,
@@ -178,6 +243,7 @@ class _AgregarPresupuestoScreenState extends State<AgregarPresupuestoScreen> {
     super.dispose();
   }
 }
+
 
 
 /*import 'package:flutter/material.dart';
