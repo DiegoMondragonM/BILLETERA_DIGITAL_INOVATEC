@@ -6,6 +6,7 @@ class AnimatedCard extends StatelessWidget {
   final Color cardColor; // Nuevo: Color personalizado desde la DB
   final String? cardType; // Nuevo: Tipo de tarjeta (Visa/Mastercard/etc)
   final String? lastDigits; // Nuevo: Últimos 4 dígitos para mayor seguridad
+  final VoidCallback onMenuPressed;
 
   const AnimatedCard({
     required this.index,
@@ -13,6 +14,7 @@ class AnimatedCard extends StatelessWidget {
     this.cardColor = Colors.deepPurpleAccent, // Valor por defecto
     this.cardType,
     this.lastDigits,
+    required this.onMenuPressed,
   });
 
   @override
@@ -39,6 +41,15 @@ class AnimatedCard extends StatelessWidget {
             children: [
               // Logo según tipo de tarjeta (arriba a la derecha)
               _buildCardLogo(),
+              // Botón de menú en la esquina superior izquierda
+              Positioned(
+                top: 10,
+                left: 10,
+                child: IconButton(
+                  icon: Icon(Icons.more_vert, color: Colors.white),
+                  onPressed: onMenuPressed,
+                ),
+              ),
 
               // Nombre de la tarjeta (centrado)
               Center(

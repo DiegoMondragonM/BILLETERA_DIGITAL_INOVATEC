@@ -4,6 +4,7 @@ import 'package:namer_app/Screens/login_screen.dart';
 import '../Widgets/animated_card.dart';
 import '../Service/db_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:namer_app/Screens/add_budget.dart';
 
 class WalletScreen extends StatefulWidget {
   @override
@@ -163,17 +164,23 @@ class _WalletScreenState extends State<WalletScreen> {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Tarjetas
         for (int i = 0; i < userCards.length; i++)
           Positioned(
             top: i * 10,
             child: GestureDetector(
               onTap: () => _showCardDetails(userCards[i]),
+              onVerticalDragEnd: (details) {
+                if (details.primaryVelocity! < 0) {
+                  // Swipe hacia arriba
+                  _sendCardToBack();
+                }
+              },
               child: AnimatedCard(
                 index: i,
                 cardInfo: userCards[i]['name'],
                 cardColor: Color(userCards[i]['color']),
                 cardType: userCards[i]['type'],
+                onMenuPressed: () => _showCardOptions(userCards[i]),
               ),
             ),
           ),
@@ -235,5 +242,83 @@ class _WalletScreenState extends State<WalletScreen> {
             ],
           ),
     );
+  }
+
+  void _sendCardToBack() {
+    if (userCards.isNotEmpty) {
+      setState(() {
+        // Crear una copia de la lista para que sea mutable
+        userCards = List<Map<String, dynamic>>.from(userCards);
+
+        // Tomar la primera tarjeta y enviarla al final
+        var firstCard = userCards.removeAt(0);
+        userCards.add(firstCard);
+      });
+    }
+  }
+
+  void _showCardOptions(Map<String, dynamic> card) async {
+    // Obtener el userId de SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getInt('userId') ?? 0;
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Container(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.add_shopping_cart),
+                title: Text('Agregar Gasto'),
+                onTap: () {
+                  Navigator.pop(context);
+                  //_addExpenseToCard(card);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.attach_money),
+                title: Text('Agregar Presupuesto'),
+                onTap: () {
+                  Navigator.pop(context); // Cierra el bottom sheet
+                  _navigateToAddBudget(
+                    cardNumber: card['number'] as String,
+                    userId: userId,
+                  );
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.analytics),
+                title: Text('Ver Reportes'),
+                onTap: () {
+                  Navigator.pop(context);
+                  //_showCardReports(card);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Nuevo método para navegar a la pantalla de presupuesto
+  void _navigateToAddBudget({required String cardNumber, required int userId}) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (context) =>
+                AddBudget(tarjetaPreseleccionada: cardNumber, userId: userId),
+      ),
+    ).then((saved) {
+      if (saved == true) {
+        _loadCards();
+      }
+    });
   }
 }

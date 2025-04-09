@@ -27,6 +27,7 @@ class DBHelper {
 
   // Crea las tablas de la base de datos
   FutureOr<void> _createDB(Database db, int version) async {
+    //tabla para guardar usuarios
     await db.execute('''
       CREATE TABLE users(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,6 +38,7 @@ class DBHelper {
         password TEXT
       )
     ''');
+    //tabla para gusrdar las tarejtas por usuario
     await db.execute('''
     CREATE TABLE cards(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +52,19 @@ class DBHelper {
       FOREIGN KEY (userId) REFERENCES users(id)
     )
   ''');
+    //tabla para ingresar los presupuestos
+    await db.execute('''
+  CREATE TABLE budgets(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    amount REAL,
+    paymentDate TEXT,
+    cardNumber TEXT,
+    userId INTEGER,
+    FOREIGN KEY (userId) REFERENCES users(id),
+    FOREIGN KEY (cardNumber) REFERENCES cards(number)
+      )
+    ''');
   }
 
   // Método para insertar un usuario
@@ -87,5 +102,44 @@ class DBHelper {
   Future<List<Map<String, dynamic>>> getCards(int userId) async {
     final db = await database;
     return await db.query('cards', where: 'userId = ?', whereArgs: [userId]);
+  }
+
+  // metodo Para insertar presupuestos
+  Future<int> insertBudget(Map<String, dynamic> budget) async {
+    final db = await database;
+    return await db.insert('budgets', budget);
+  }
+
+  // metodo Para obtener presupuestos por usuario
+  Future<List<Map<String, dynamic>>> getBudgetsByUser(int userId) async {
+    final db = await database;
+    return await db.query('budgets', where: 'userId = ?', whereArgs: [userId]);
+  }
+
+  // metodo Para obtener presupuestos por tarjeta
+  Future<List<Map<String, dynamic>>> getBudgetsByCard(String cardNumber) async {
+    final db = await database;
+    return await db.query(
+      'budgets',
+      where: 'cardNumber = ?',
+      whereArgs: [cardNumber],
+    );
+  }
+
+  // metodo Para actualizar presupuestos
+  Future<int> updateBudget(Map<String, dynamic> budget) async {
+    final db = await database;
+    return await db.update(
+      'budgets',
+      budget,
+      where: 'id = ?',
+      whereArgs: [budget['id']],
+    );
+  }
+
+  // metodo Para eliminar presupuestos
+  Future<int> deleteBudget(int id) async {
+    final db = await database;
+    return await db.delete('budgets', where: 'id = ?', whereArgs: [id]);
   }
 }

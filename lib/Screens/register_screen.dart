@@ -102,6 +102,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     SizedBox(height: 10.0),
                     _buildPasswordField(
                       Icons.lock,
+                      
                       'Ingresa tu contraseña',
                       _obscurePassword,
                       () {
